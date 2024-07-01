@@ -2,6 +2,8 @@ import cv2
 import numpy as np
 from screeninfo import get_monitors
 import os
+import socket
+import threading
 
 def initialize_camera():
     """
@@ -80,7 +82,36 @@ def overlay_smile(face_box, frame, smile_img):
     
     return frame
 
+def socket_server():
+    global display_mode
+    host = 'localhost'
+    port = 12345
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.bind((host, port))
+    server_socket.listen(1)
+    print("ソケットサーバーが起動しました。")
+
+    conn, addr = server_socket.accept()
+    print(f"接続されました: {addr}")
+
+    while True:
+        data = conn.recv(1024)
+        if not data:
+            break
+        display_mode = int(data.decode())
+        print(f"display_modeが{display_mode}に設定されました。")
+
+    conn.close()
+    server_socket.close()
+
 def main():
+    global display_mode
+    display_mode = 0  # 初期値を0に設定
+
+    # ソケットサーバーを別スレッドで起動
+    server_thread = threading.Thread(target=socket_server)
+    server_thread.start()
+
     cap = initialize_camera()
     if not cap:
         return
@@ -95,8 +126,6 @@ def main():
         print(f"スマイル画像が見つかりません: {smile_img_path}")
         return
     smile_img = cv2.imread(smile_img_path, cv2.IMREAD_UNCHANGED)
-
-    display_mode = 1  # 0: 通常のカメラ映像, 1: スマイル画像を合成
 
     # モニターの解像度を取得
     monitor = get_monitors()[0]
@@ -128,8 +157,6 @@ def main():
             key = cv2.waitKey(1) & 0xFF
             if key == ord('q'):
                 break
-            elif key == ord('m'):
-                display_mode = 1 - display_mode  # display_modeを切り替え
 
         else:
             break
