@@ -52,33 +52,52 @@ def load_model():
 
     return model
 
-def overlay_smile(face_box, frame, smile_img):
+def load_emotion_images():
     """
-    顔部分にスマイル画像を合成
+    感情画像をロード
+
+    Returns:
+        emotion_images (dict): 感情画像を格納した辞書
+    """
+    emotions = ["anger", "joy", "surprise", "sorrow", "magao"]
+    emotion_images = {}
+
+    for emotion in emotions:
+        img_path = f'face/{emotion}.png'
+        if os.path.exists(img_path):
+            emotion_images[emotion] = cv2.imread(img_path, cv2.IMREAD_UNCHANGED)
+        else:
+            print(f"画像が見つかりません: {img_path}")
+
+    return emotion_images
+
+def overlay_emotion(face_box, frame, emotion_img):
+    """
+    顔部分に感情画像を合成
 
     Args:
         face_box (array): 顔の位置を示すボックス情報 (x, y, w, h)
         frame (array): カメラからのフレーム
-        smile_img (array): スマイル画像
+        emotion_img (array): 感情画像
 
     Returns:
-        frame (array): スマイル画像を合成したフレーム
+        frame (array): 感情画像を合成したフレーム
     """
     x, y, w, h = face_box.astype(int)
     
-    # スマイル画像を顔のサイズにリサイズ
-    smile_resized = cv2.resize(smile_img, (w, h))
+    # 感情画像を顔のサイズにリサイズ
+    emotion_resized = cv2.resize(emotion_img, (w, h))
     
-    # スマイル画像を顔の位置に合成
-    if smile_resized.shape[2] == 4:  # スマイル画像がRGBAの場合
-        alpha_s = smile_resized[:, :, 3] / 255.0
+    # 感情画像を顔の位置に合成
+    if emotion_resized.shape[2] == 4:  # 感情画像がRGBAの場合
+        alpha_s = emotion_resized[:, :, 3] / 255.0
         alpha_l = 1.0 - alpha_s
         
         for c in range(0, 3):
-            frame[y:y+h, x:x+w, c] = (alpha_s * smile_resized[:, :, c] +
+            frame[y:y+h, x:x+w, c] = (alpha_s * emotion_resized[:, :, c] +
                                       alpha_l * frame[y:y+h, x:x+w, c])
     else:
-        frame[y:y+h, x:x+w] = smile_resized
+        frame[y:y+h, x:x+w] = emotion_resized
     
     return frame
 
@@ -120,17 +139,21 @@ def main():
     if not model:
         return
 
-    # スマイル画像の読み込み
-    smile_img_path = 'face/smile.png'
-    if not os.path.exists(smile_img_path):
-        print(f"スマイル画像が見つかりません: {smile_img_path}")
-        return
-    smile_img = cv2.imread(smile_img_path, cv2.IMREAD_UNCHANGED)
+    # 感情画像の読み込み
+    emotion_images = load_emotion_images()
 
     # モニターの解像度を取得
     monitor = get_monitors()[0]
     screen_width = monitor.width
     screen_height = monitor.height
+
+    emotion_map = {
+        1: "anger",
+        2: "joy",
+        3: "surprise",
+        4: "sorrow",
+        5: "magao"
+    }
 
     while True:
         # カメラのフレームを常に表示
@@ -138,14 +161,18 @@ def main():
         if ret:
             height, width, channels = frame.shape
 
-            if display_mode == 1:
-                # 顔検出
-                model.setInputSize((width, height))
-                faces = model.detect(frame)
-                if faces[1] is not None:
-                    for face in faces[1]:
-                        box = face[:4]
-                        frame = overlay_smile(box, frame, smile_img)
+            if display_mode in emotion_map:
+                emotion = emotion_map[display_mode]
+                if emotion in emotion_images:
+                    emotion_img = emotion_images[emotion]
+
+                    # 顔検出
+                    model.setInputSize((width, height))
+                    faces = model.detect(frame)
+                    if faces[1] is not None:
+                        for face in faces[1]:
+                            box = face[:4]
+                            frame = overlay_emotion(box, frame, emotion_img)
 
             # フルスクリーンのサイズに合わせてカメラのフレームをリサイズ
             frame = cv2.resize(frame, (screen_width, screen_height))
