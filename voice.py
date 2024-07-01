@@ -5,6 +5,12 @@ import socket
 import random
 
 def take_photo():
+    """
+    カメラで写真を撮影し、ファイルに保存する。
+
+    Returns:
+        str: 保存された写真のファイルパス。失敗した場合はNone。
+    """
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         print("カメラが起動できません")
@@ -20,20 +26,39 @@ def take_photo():
     return None
 
 def determine_emotion(emotions):
-    """Determine the dominant emotion from the given emotion scores."""
+    """
+    渡された感情スコアから最も強い感情を決定する。
+
+    Args:
+        emotions (dict): 感情スコアの辞書。
+
+    Returns:
+        str: 最も強い感情の名前。
+    """
+    # 全ての値が2以下、または全てが同じ値の場合は"magao"を返す
     if all(value == 2 or value == 1 for value in emotions.values()) or len(set(emotions.values())) == 1:
         return "magao"
 
+    # 最大値を持つ感情を探す
     max_value = max(emotions.values())
     max_emotions = [emotion for emotion, value in emotions.items() if value == max_value]
 
+    # 最大値を持つ感情が複数ある場合はランダムに選ぶ
     if len(max_emotions) > 1:
         return random.choice(max_emotions)
 
     return max_emotions[0]
 
 def detect_faces(path):
-    """Detects faces in an image and converts emotions to numerical values."""
+    """
+    画像内の顔を検出し、感情を数値に変換する。
+
+    Args:
+        path (str): 画像ファイルのパス。
+
+    Returns:
+        list: 顔検出結果と感情スコアのリスト。
+    """
     client = vision.ImageAnnotatorClient()
     with open(path, "rb") as image_file:
         content = image_file.read()
@@ -78,7 +103,15 @@ def detect_faces(path):
     return face_results
 
 def emotion_to_code(dominant_emotion):
-    """Convert dominant emotion to corresponding code."""
+    """
+    感情名を対応するコードに変換する。
+
+    Args:
+        dominant_emotion (str): 感情の名前。
+
+    Returns:
+        int: 感情に対応するコード。
+    """
     emotion_code = {
         "anger": 1,
         "joy": 2,
@@ -86,7 +119,7 @@ def emotion_to_code(dominant_emotion):
         "sorrow": 4,
         "magao": 5
     }
-    return emotion_code.get(dominant_emotion, 5)  # Default to 5 (magao) if not found
+    return emotion_code.get(dominant_emotion, 5)  # デフォルトは5 (magao)
 
 def main():
     recognizer = sr.Recognizer()
@@ -104,15 +137,18 @@ def main():
             audio = recognizer.listen(source)
 
         try:
+            # 音声をテキストに変換
             text = recognizer.recognize_google(audio, language="ja-JP")
             print(f"Recognized: {text}")
             if text == "こんにちは":
                 photo_path = take_photo()
                 if photo_path:
+                    # 顔検出と感情分析
                     face_results = detect_faces(photo_path)
                     if face_results:
                         dominant_emotion = face_results[0]['dominant_emotion']
                         emotion_code = emotion_to_code(dominant_emotion)
+                        # ソケットに感情コードを送信
                         client_socket.sendall(str(emotion_code).encode())
                         print(f"display_modeを{emotion_code}に設定しました。")
             elif text == "終わりだよ":
